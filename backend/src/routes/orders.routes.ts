@@ -22,7 +22,7 @@ router.post(
   "/",
   authenticate,
   authorize("customer"),
-  validateBody(["items", "accountId", "shippingAddress"]),
+  validateBody(["items", "shippingAddress"]),
   async (req: Request, res: Response): Promise<void> => {
     const transaction = await sequelize.transaction();
 
@@ -38,28 +38,45 @@ router.post(
         return;
       }
 
-      // Validate account belongs to customer
-      const account = await CustomerAccount.findOne({
-        where: {
-          id: accountId,
-          customer_id: customer.id,
-        },
-      });
+      // Check installments to determine payment type
+      const numInstallments = installments
+        ? parseInt(installments.toString())
+        : 1;
+      const isRecurring = numInstallments > 1;
 
-      if (!account) {
-        await transaction.rollback();
-        res
-          .status(404)
-          .json({ error: "Account not found or does not belong to customer" });
-        return;
-      }
+      // Validate account belongs to customer IF recurring payment
+      let account: any = null;
+      if (isRecurring) {
+        if (!accountId) {
+          await transaction.rollback();
+          res
+            .status(400)
+            .json({ error: "Account ID is required for installment payments" });
+          return;
+        }
 
-      if (!account.verified) {
-        await transaction.rollback();
-        res
-          .status(400)
-          .json({ error: "Account not verified. Please verify BVN first." });
-        return;
+        account = await CustomerAccount.findOne({
+          where: {
+            id: accountId,
+            customer_id: customer.id,
+          },
+        });
+
+        if (!account) {
+          await transaction.rollback();
+          res.status(404).json({
+            error: "Account not found or does not belong to customer",
+          });
+          return;
+        }
+
+        if (!account.verified) {
+          await transaction.rollback();
+          res
+            .status(400)
+            .json({ error: "Account not verified. Please verify BVN first." });
+          return;
+        }
       }
 
       // Validate and calculate order total
@@ -108,8 +125,7 @@ router.post(
       const vendorId = firstProduct!.vendor_id;
 
       // Calculate installment details
-      const numInstallments = installments || null;
-      const amountPerInstallment = numInstallments
+      const amountPerInstallment = isRecurring
         ? totalAmount / numInstallments
         : null;
 
@@ -119,7 +135,7 @@ router.post(
           customer_id: customer.id,
           vendor_id: vendorId,
           total_amount: totalAmount,
-          installments: numInstallments,
+          installments: isRecurring ? numInstallments : null,
           amount_per_installment: amountPerInstallment,
           installments_paid: 0,
           amount_paid: 0,
@@ -246,8 +262,8 @@ router.post(
             customerName: `${customer.first_name} ${customer.last_name}`,
             customerEmail: email,
             customerMobile: customer.phone,
-            accountNumber: account.account_number,
-            bankCode: account.bank_code,
+            accountNumber: account?.account_number || "",
+            bankCode: account?.bank_code || "",
             amount: totalAmount,
             installments: 1,
             orderId: order.id,

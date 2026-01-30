@@ -20,8 +20,8 @@ interface SendInvoiceParams {
   customerName: string;
   customerEmail: string;
   customerMobile?: string;
-  accountNumber: string;
-  bankCode: string;
+  accountNumber?: string;
+  bankCode?: string;
   amount: number;
   installments: number;
   orderId: string;
@@ -197,8 +197,8 @@ class OnePipeService {
       auth = {
         type: "bank.account",
         secure: this.encryptAccountDetails(
-          params.accountNumber,
-          params.bankCode,
+          params.accountNumber || "",
+          params.bankCode || "",
         ),
         auth_provider: "paywithaccount",
       };

@@ -19,11 +19,13 @@ interface SendInvoiceParams {
   customerId: string;
   customerName: string;
   customerEmail: string;
+  customerMobile?: string;
   accountNumber: string;
   bankCode: string;
   amount: number;
   installments: number;
   orderId: string;
+  paymentType?: "recurring" | "single_payment";
 }
 
 class OnePipeService {
@@ -94,7 +96,7 @@ class OnePipeService {
 
     const payload = {
       request_ref: requestRef,
-      request_type: "lookup_bvn_min",
+      request_type: "lookup_account_min",
       auth: {
         type: "bank.account",
         secure: this.encryptAccountDetails(
@@ -148,56 +150,96 @@ class OnePipeService {
 
   /**
    * Create payment mandate (send_invoice)
-   * This creates a recurring payment mandate for installments
+   * This creates a recurring payment mandate for installments or single payment invoice
    */
   async sendInvoice(params: SendInvoiceParams): Promise<any> {
     const requestRef = `INV_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const signature = this.generateSignature(requestRef);
 
-    const amountPerInstallment = params.amount / params.installments;
+    // Default to recurring if not specified, or if installments > 1
+    const paymentType =
+      params.paymentType ||
+      (params.installments > 1 ? "recurring" : "single_payment");
+    const isRecurring = paymentType === "recurring";
+
+    const amountPerInstallment = params.amount / (params.installments || 1);
     const startDate = new Date();
     const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + params.installments);
+    if (params.installments && params.installments > 0) {
+      endDate.setMonth(endDate.getMonth() + params.installments);
+    } else {
+      endDate.setMonth(endDate.getMonth() + 1); // Default for single
+    }
 
-    const payload = {
-      request_ref: requestRef,
-      request_type: "send_invoice",
-      auth: {
+    let auth = {};
+    let meta = {};
+    let transactionDetails = {};
+
+    if (!isRecurring) {
+      // Single payment configuration matching user sample
+      auth = {
+        type: null,
+        secure: null,
+        auth_provider: "PaywithAccount",
+      };
+
+      meta = {
+        type: "single_payment",
+        expires_in: 30, // minutes
+        suppress_messaging: false,
+        biller_code: "000729",
+        order_id: params.orderId,
+      };
+
+      transactionDetails = {};
+    } else {
+      // Recurring payment configuration
+      auth = {
         type: "bank.account",
         secure: this.encryptAccountDetails(
           params.accountNumber,
           params.bankCode,
         ),
         auth_provider: "paywithaccount",
-      },
+      };
+
+      meta = {
+        a_bank_code: params.bankCode,
+        a_account_number: params.accountNumber,
+        mandate_type: "recurring",
+        mandate_frequency: "monthly",
+        mandate_duration: params.installments,
+        mandate_start_date: startDate.toISOString().split("T")[0],
+        mandate_end_date: endDate.toISOString().split("T")[0],
+        order_id: params.orderId,
+      };
+
+      transactionDetails = {
+        description: `BNPL Payment - ${params.installments} installments of ₦${amountPerInstallment.toFixed(2)}`,
+        total_amount: params.amount,
+        installments: params.installments,
+      };
+    }
+
+    const payload = {
+      request_ref: requestRef,
+      request_type: "send invoice",
+      auth: auth,
       transaction: {
-        mock_mode: this.config.mockMode ? "live" : "inspect",
+        mock_mode: this.config.mockMode ? "Live" : "Inspect",
         transaction_ref: requestRef,
-        transaction_desc: `Order ${params.orderId} - ${params.installments} month installment`,
+        transaction_desc: `Order ${params.orderId}`,
         transaction_ref_parent: null,
-        amount: amountPerInstallment,
+        amount: isRecurring ? amountPerInstallment : params.amount,
         customer: {
           customer_ref: params.customerId,
           firstname: params.customerName.split(" ")[0],
           surname: params.customerName.split(" ").slice(1).join(" "),
           email: params.customerEmail,
-          mobile: "",
+          mobile_no: params.customerMobile || params.customerId,
         },
-        meta: {
-          a_bank_code: params.bankCode,
-          a_account_number: params.accountNumber,
-          mandate_type: "recurring",
-          mandate_frequency: "monthly",
-          mandate_duration: params.installments,
-          mandate_start_date: startDate.toISOString().split("T")[0],
-          mandate_end_date: endDate.toISOString().split("T")[0],
-          order_id: params.orderId,
-        },
-        details: {
-          description: `BNPL Payment - ${params.installments} installments of ₦${amountPerInstallment.toFixed(2)}`,
-          total_amount: params.amount,
-          installments: params.installments,
-        },
+        meta: meta,
+        details: transactionDetails,
       },
     };
 
@@ -217,7 +259,7 @@ class OnePipeService {
         error.response?.data || error.message,
       );
       throw new Error(
-        `Failed to create mandate: ${error.response?.data?.message || error.message}`,
+        `Failed to create mandate/invoice: ${error.response?.data?.message || error.message}`,
       );
     }
   }

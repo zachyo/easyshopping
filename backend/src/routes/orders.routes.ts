@@ -229,9 +229,47 @@ router.post(
           }
         }
       } else {
-        // Full payment - no mandate needed
-        order.status = "pending";
-        await order.save({ transaction });
+        // Full payment - single payment invoice
+        console.log(
+          "📝 Creating OnePipe invoice for single payment:",
+          order.id,
+        );
+
+        try {
+          const customerWithUser = (await Customer.findByPk(customer.id, {
+            include: [{ association: "user" }],
+          })) as any;
+          const email = customerWithUser?.user?.email || "customer@example.com";
+
+          await onepipeService.sendInvoice({
+            customerId: customer.id,
+            customerName: `${customer.first_name} ${customer.last_name}`,
+            customerEmail: email,
+            customerMobile: customer.phone,
+            accountNumber: account.account_number,
+            bankCode: account.bank_code,
+            amount: totalAmount,
+            installments: 1,
+            orderId: order.id,
+            paymentType: "single_payment",
+          });
+
+          order.status = "pending";
+          await order.save({ transaction });
+        } catch (error: any) {
+          console.error("OnePipe single payment invoice failed:", error);
+
+          if (process.env.ONEPIPE_MOCK_MODE === "true") {
+            console.log(
+              "⚠️ Mock mode: creating order without OnePipe single payment",
+            );
+            order.status = "pending";
+            await order.save({ transaction });
+          } else {
+            await transaction.rollback();
+            throw error;
+          }
+        }
       }
 
       await transaction.commit();

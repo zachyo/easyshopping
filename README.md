@@ -4,6 +4,12 @@
 
 ---
 
+## Live Deployed Links
+
+Frontend - https://creation-kit-plan.lovable.app
+
+Backend - https://easyshopping-production.up.railway.app/
+
 ## 📚 Documentation Overview
 
 This project contains comprehensive documentation to guide you through building the Easy Shopping platform with a focus on **payment and reconciliation flow**.

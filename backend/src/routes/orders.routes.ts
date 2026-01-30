@@ -11,6 +11,7 @@ import {
   validateBody,
 } from "../middleware/auth.middleware";
 import sequelize from "../config/database";
+import User from "../models/User";
 
 const router = Router();
 
@@ -32,6 +33,8 @@ router.post(
 
       // Get customer
       const customer = await Customer.findOne({ where: { user_id: userId } });
+      const user = await User.findByPk(userId);
+      const email = user?.email || "customer@example.com";
       if (!customer) {
         await transaction.rollback();
         res.status(404).json({ error: "Customer profile not found" });
@@ -157,12 +160,7 @@ router.post(
           const mandateResponse = await onepipeService.sendInvoice({
             customerId: customer.id,
             customerName: `${customer.first_name} ${customer.last_name}`,
-            customerEmail:
-              (
-                (await Customer.findByPk(customer.id, {
-                  include: [{ association: "user" }],
-                })) as any
-              )?.user?.email || "customer@example.com",
+            customerEmail: email || "customer@example.com",
             accountNumber: account.account_number,
             bankCode: account.bank_code,
             amount: totalAmount,
@@ -252,11 +250,6 @@ router.post(
         );
 
         try {
-          const customerWithUser = (await Customer.findByPk(customer.id, {
-            include: [{ association: "user" }],
-          })) as any;
-          const email = customerWithUser?.user?.email || "customer@example.com";
-
           await onepipeService.sendInvoice({
             customerId: customer.id,
             customerName: `${customer.first_name} ${customer.last_name}`,

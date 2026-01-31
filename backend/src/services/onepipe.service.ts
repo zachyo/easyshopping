@@ -1,6 +1,5 @@
 import axios, { AxiosInstance } from "axios";
 import crypto from "crypto";
-import CryptoJS from "crypto-js";
 
 interface OnePipeConfig {
   apiUrl: string;
@@ -60,30 +59,24 @@ class OnePipeService {
   /**
    * Encrypt account details using TripleDES
    */
+  /**
+   * Encrypt account details using TripleDES
+   */
   private encryptAccountDetails(
     accountNumber: string,
     bankCode: string,
   ): string {
-    const data = `${accountNumber};${bankCode}`;
-    const key = CryptoJS.enc.Utf16LE.parse(this.config.clientSecret);
-    const keyHash = CryptoJS.MD5(key);
+    const secretKey = this.config.clientSecret;
+    const plainText = `${accountNumber};${bankCode}`;
 
-    // Extend key to 24 bytes for TripleDES
-    const keyBytes = CryptoJS.lib.WordArray.create();
-    keyBytes.concat(keyHash);
-    keyBytes.concat(CryptoJS.lib.WordArray.create(keyHash.words.slice(0, 2)));
-
-    const encrypted = CryptoJS.TripleDES.encrypt(
-      CryptoJS.enc.Utf16LE.parse(data),
-      keyBytes,
-      {
-        mode: CryptoJS.mode.CBC,
-        padding: CryptoJS.pad.Pkcs7,
-        iv: CryptoJS.lib.WordArray.create([0, 0]),
-      },
-    );
-
-    return encrypted.toString();
+    const bufferedKey = Buffer.from(secretKey, "utf16le");
+    const key = crypto.createHash("md5").update(bufferedKey).digest();
+    const newKey = Buffer.concat([key, key.slice(0, 8)]);
+    const IV = Buffer.alloc(8, "\0");
+    const cipher = crypto
+      .createCipheriv("des-ede3-cbc", newKey, IV)
+      .setAutoPadding(true);
+    return cipher.update(plainText, "utf8", "base64") + cipher.final("base64");
   }
 
   /**
@@ -110,7 +103,7 @@ class OnePipeService {
         auth_provider: "paywithaccount",
       },
       transaction: {
-        mock_mode: this.config.mockMode ? "live" : "inspect",
+        mock_mode: this.config.mockMode ? "inspect" : "live",
         transaction_ref: requestRef,
         transaction_desc: "BVN Verification",
         transaction_ref_parent: null,
@@ -205,9 +198,9 @@ class OnePipeService {
     if (!isRecurring) {
       // Single payment configuration matching user sample
       auth = {
-        type: null,
+        type: "bank.account",
         secure: null,
-        auth_provider: "PaywithAccount",
+        auth_provider: "paywithaccount",
       };
 
       meta = {
@@ -253,7 +246,7 @@ class OnePipeService {
       request_type: "send invoice",
       auth: auth,
       transaction: {
-        mock_mode: this.config.mockMode ? "Live" : "Inspect",
+        mock_mode: this.config.mockMode ? "inspect" : "live",
         transaction_ref: requestRef,
         transaction_desc: `Order ${params.orderId}`,
         transaction_ref_parent: null,
@@ -307,7 +300,7 @@ class OnePipeService {
         auth_provider: "paywithaccount",
       },
       transaction: {
-        mock_mode: this.config.mockMode ? "live" : "inspect",
+        mock_mode: this.config.mockMode ? "inspect" : "live",
         transaction_ref: requestRef,
         meta: {
           mandate_id: mandateId,
@@ -352,7 +345,7 @@ class OnePipeService {
         auth_provider: "paywithaccount",
       },
       transaction: {
-        mock_mode: this.config.mockMode ? "live" : "inspect",
+        mock_mode: this.config.mockMode ? "inspect" : "live",
         transaction_ref: requestRef,
       },
     };

@@ -263,6 +263,8 @@ class OnePipeService {
       },
     };
 
+    console.log("Send Invoice Payload:", payload);
+
     try {
       const response = await this.client.post("/", payload, {
         headers: {
@@ -332,7 +334,11 @@ class OnePipeService {
   /**
    * Get list of Nigerian banks
    */
-  async getBanks(): Promise<any> {
+  async getBanks(params?: {
+    customerName?: string;
+    customerEmail?: string;
+    customerMobile?: string;
+  }): Promise<any> {
     const requestRef = `BANKS_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const signature = this.generateSignature(requestRef);
 
@@ -342,11 +348,27 @@ class OnePipeService {
       auth: {
         type: null,
         secure: null,
-        auth_provider: "paywithaccount",
+        auth_provider: "PaywithAccount",
+        route_mode: null,
       },
       transaction: {
         mock_mode: this.config.mockMode ? "inspect" : "live",
         transaction_ref: requestRef,
+        transaction_desc: "Get Banks List",
+        transaction_ref_parent: null,
+        amount: 0,
+        customer: {
+          customer_ref: requestRef,
+          firstname: params?.customerName?.split(" ")[0] || "Guest",
+          surname:
+            params?.customerName?.split(" ").slice(1).join(" ") || "User",
+          email: params?.customerEmail || "guest@example.com",
+          mobile_no: params?.customerMobile || "08000000000",
+        },
+        meta: {
+          pwa_enabled_only: true,
+        },
+        details: null,
       },
     };
 
@@ -363,6 +385,70 @@ class OnePipeService {
       console.error("Get Banks Error:", error.response?.data || error.message);
       throw new Error(
         `Failed to get banks: ${error.response?.data?.message || error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Lookup Account Information
+   */
+  async lookupAccount(params: {
+    accountNumber: string;
+    bankCode: string;
+    customerName: string;
+    customerEmail: string;
+    customerMobile?: string;
+  }): Promise<any> {
+    const requestRef = `LOOKUP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const signature = this.generateSignature(requestRef);
+
+    const payload = {
+      request_ref: requestRef,
+      request_type: "lookup_account_min",
+      auth: {
+        type: "bank.account",
+        secure: this.encryptAccountDetails(
+          params.accountNumber,
+          params.bankCode,
+        ),
+        auth_provider: "PaywithAccount",
+        route_mode: null,
+      },
+      transaction: {
+        mock_mode: this.config.mockMode ? "inspect" : "live",
+        transaction_ref: requestRef,
+        transaction_desc: "Account Lookup",
+        transaction_ref_parent: null,
+        amount: 0,
+        customer: {
+          customer_ref: requestRef,
+          firstname: params.customerName.split(" ")[0],
+          surname: params.customerName.split(" ").slice(1).join(" "),
+          email: params.customerEmail,
+          mobile_no: params.customerMobile || requestRef,
+        },
+        meta: {},
+        details: {},
+      },
+    };
+
+    try {
+      const response = await this.client.post("/", payload, {
+        headers: {
+          Authorization: `Bearer ${this.config.apiKey}`,
+          Signature: signature,
+        },
+      });
+
+      console.log("Account Lookup Response:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error(
+        "Account Lookup Error:",
+        error.response?.data || error.message,
+      );
+      throw new Error(
+        `Account lookup failed: ${error.response?.data?.message || error.message}`,
       );
     }
   }

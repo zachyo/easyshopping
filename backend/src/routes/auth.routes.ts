@@ -10,10 +10,10 @@ const router = Router();
  */
 router.post(
   "/register/customer",
-  validateBody(["email", "password", "firstName", "lastName", "phone", "bvn"]),
+  validateBody(["email", "password", "firstName", "lastName", "phone"]),
   async (req: Request, res: Response) => {
     try {
-      const { email, password, firstName, lastName, phone, bvn } = req.body;
+      const { email, password, firstName, lastName, phone } = req.body;
 
       const result = await authService.registerCustomer({
         email,
@@ -21,7 +21,6 @@ router.post(
         firstName,
         lastName,
         phone,
-        bvn,
       });
 
       res.status(201).json({
@@ -70,7 +69,7 @@ router.post(
       });
 
       res.status(201).json({
-        message: "Vendor registered successfully. Awaiting admin approval.",
+        message: "Vendor registered successfully.",
         ...result,
       });
     } catch (error: any) {

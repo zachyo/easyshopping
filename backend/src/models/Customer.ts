@@ -7,7 +7,6 @@ interface CustomerAttributes {
   first_name: string;
   last_name: string;
   phone: string;
-  bvn: string;
   created_at: Date;
 }
 
@@ -25,7 +24,6 @@ class Customer
   public first_name!: string;
   public last_name!: string;
   public phone!: string;
-  public bvn!: string;
   public created_at!: Date;
 }
 
@@ -55,13 +53,6 @@ Customer.init(
     phone: {
       type: DataTypes.STRING(20),
       allowNull: false,
-    },
-    bvn: {
-      type: DataTypes.STRING(11),
-      allowNull: false,
-      validate: {
-        len: [11, 11],
-      },
     },
     created_at: {
       type: DataTypes.DATE,

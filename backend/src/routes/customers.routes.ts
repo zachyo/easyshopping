@@ -44,7 +44,8 @@ router.get(
       res.status(200).json({
         accounts: accounts.map((acc) => ({
           id: acc.id,
-          accountNumber: acc.account_number,
+          // Mask account number: show only last 4 digits
+          accountNumberMasked: `****${acc.account_number.slice(-4)}`,
           bankCode: acc.bank_code,
           bankName: acc.bank_name,
           accountName: acc.account_name,
@@ -69,11 +70,11 @@ router.post(
   "/:customerId/accounts",
   authenticate,
   authorize("customer", "admin"),
-  validateBody(["accountNumber", "bankCode", "bankName"]),
+  validateBody(["accountNumber", "bankCode", "bankName", "bvn"]),
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { customerId } = req.params;
-      const { accountNumber, bankCode, bankName } = req.body;
+      const { accountNumber, bankCode, bankName, bvn } = req.body;
       const userId = (req as any).user.userId;
 
       // Verify customer belongs to user
@@ -88,16 +89,27 @@ router.post(
         return;
       }
 
-      // Check if account already exists
+      // Check if account already exists for ANY customer
       const existingAccount = await CustomerAccount.findOne({
         where: {
-          customer_id: customerId,
           account_number: accountNumber,
+          bank_code: bankCode,
         },
       });
 
       if (existingAccount) {
-        res.status(400).json({ error: "Account already linked" });
+        // If it belongs to CURRENT customer
+        if (existingAccount.customer_id === customerId) {
+          res
+            .status(400)
+            .json({ error: "Account already linked to your profile" });
+          return;
+        }
+        // If it belongs to ANOTHER customer
+        res.status(400).json({
+          error:
+            "This account is already linked to another Easy Shopping user.",
+        });
         return;
       }
 
@@ -121,8 +133,8 @@ router.post(
       let accountName = "Unknown";
 
       try {
-        const bvnResponse = await onepipeService.verifyBVN({
-          bvn: customer.bvn,
+        const bvnResponse = await onepipeService.lookupBvnMin({
+          bvn: bvn,
           accountNumber,
           bankCode,
         });
@@ -130,12 +142,14 @@ router.post(
         console.log("BVN Verification Response:", bvnResponse);
 
         // Check if verification was successful
-        if (bvnResponse.status === "Successful" || bvnResponse.data) {
+        if (bvnResponse.bvn_linked === true) {
           bvnVerified = true;
-          accountName =
-            bvnResponse.data?.account_name ||
-            bvnResponse.data?.accountName ||
-            `${customer.first_name} ${customer.last_name}`;
+          accountName = bvnResponse.account_name;
+        } else {
+          res.status(400).json({
+            error: "BVN doesn't match this account. Please check your details.",
+          });
+          return;
         }
       } catch (error: any) {
         console.error("BVN verification failed:", error.message);

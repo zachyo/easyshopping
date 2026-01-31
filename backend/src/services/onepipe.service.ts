@@ -90,13 +90,17 @@ class OnePipeService {
    * Verify BVN matches account holder
    * OnePipe API: lookup_bvn_min
    */
-  async verifyBVN(params: BVNVerificationParams): Promise<any> {
+  /**
+   * Verify BVN matches account holder
+   * OnePipe API: lookup_bvn_min
+   */
+  async lookupBvnMin(params: BVNVerificationParams): Promise<any> {
     const requestRef = `BVN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const signature = this.generateSignature(requestRef);
 
     const payload = {
       request_ref: requestRef,
-      request_type: "lookup_account_min",
+      request_type: "lookup_bvn_min",
       auth: {
         type: "bank.account",
         secure: this.encryptAccountDetails(
@@ -136,12 +140,35 @@ class OnePipeService {
       });
 
       console.log("BVN Verification Response:", response.data);
-      return response.data;
+
+      // Map OnePipe response to simplified format
+      // Note: Adjust mapping based on actual API response structure
+      if (response.data.status === "Successful") {
+        return {
+          bvn_linked: true,
+          account_name: response.data.data?.account_name || "Verified Customer",
+          raw: response.data,
+        };
+      }
+
+      return {
+        bvn_linked: false,
+        raw: response.data,
+      };
     } catch (error: any) {
       console.error(
         "BVN Verification Error:",
         error.response?.data || error.message,
       );
+      // If mock mode, simulate success if needed, or rethrow
+      if (this.config.mockMode) {
+        return {
+          bvn_linked: true,
+          account_name: "Mock User",
+          raw: {},
+        };
+      }
+
       throw new Error(
         `BVN verification failed: ${error.response?.data?.message || error.message}`,
       );

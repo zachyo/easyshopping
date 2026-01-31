@@ -10,7 +10,6 @@ interface RegisterCustomerParams {
   firstName: string;
   lastName: string;
   phone: string;
-  bvn: string;
 }
 
 interface RegisterVendorParams {
@@ -68,11 +67,6 @@ class AuthService {
       throw new Error("Email already registered");
     }
 
-    // Validate BVN length
-    if (params.bvn.length !== 11) {
-      throw new Error("BVN must be 11 digits");
-    }
-
     // Hash password
     const passwordHash = await this.hashPassword(params.password);
 
@@ -89,7 +83,6 @@ class AuthService {
       first_name: params.firstName,
       last_name: params.lastName,
       phone: params.phone,
-      bvn: params.bvn, // TODO: Encrypt BVN in production
     });
 
     // Generate token
@@ -140,7 +133,8 @@ class AuthService {
       business_category: params.businessCategory,
       settlement_account_number: params.settlementAccountNumber,
       settlement_bank_code: params.settlementBankCode,
-      approval_status: "pending",
+      approval_status: "approved",
+      approved_at: new Date(),
     });
 
     // Generate token

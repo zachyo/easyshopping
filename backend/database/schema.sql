@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS customers (
   first_name VARCHAR(100) NOT NULL,
   last_name VARCHAR(100) NOT NULL,
   phone VARCHAR(20) NOT NULL,
-  bvn VARCHAR(11) NOT NULL CHECK (LENGTH(bvn) = 11),
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -155,7 +154,7 @@ INSERT INTO users (email, password_hash, role) VALUES
 ON CONFLICT (email) DO NOTHING;
 
 COMMENT ON TABLE users IS 'User authentication table for all roles';
-COMMENT ON TABLE customers IS 'Customer profile information including BVN';
+COMMENT ON TABLE customers IS 'Customer profile information';
 COMMENT ON TABLE vendors IS 'Vendor/merchant business profiles';
 COMMENT ON TABLE customer_accounts IS 'Linked bank accounts for customers with priority system';
 COMMENT ON TABLE products IS 'Product catalog managed by vendors';
